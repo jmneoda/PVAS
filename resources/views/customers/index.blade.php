@@ -271,10 +271,10 @@
 
         /* ── Table Card ── */
         .table-card {
-            background: #d0d0d0;
-            border: 1.5px solid #999;
-            border-radius: 4px;
-            overflow: hidden;
+            background: #fff;
+        border: 1.5px solid #ccc;
+        border-radius: 6px;
+        overflow: hidden;
         }
 
         .customers-table {
@@ -308,16 +308,16 @@
         .sort-icon.active { opacity: 1; color: #1a6bbf; }
 
         .customers-table tbody tr td {
-            padding: 10px 16px;
+            padding: 10px 14px;
             font-size: 13px;
-            color: #222;
-            border-bottom: 1px solid #bbb;
-            background: #d8d8d8;
+            color: #333;
+            border-bottom: 1px solid #eee;
             white-space: nowrap;
+            vertical-align: middle;
         }
 
         .customers-table tbody tr:last-child td { border-bottom: none; }
-        .customers-table tbody tr:hover td     { background: #cccccc; }
+        .customers-table tbody tr:hover td { background: #f5f5f5; }
 
         .name-cell { font-weight: 700; color: #111; }
 
