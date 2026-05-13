@@ -18,8 +18,6 @@ class ReportsController extends Controller
         'custom',
     ];
 
-    // ── Directory where PDFs are saved on the server ───────────────────
-    private const PDF_SAVE_DIR = 'C:\\pvas_file';
 
     // ── Role display labels ────────────────────────────────────────────
     private const ROLE_LABELS = [
@@ -163,17 +161,11 @@ class ReportsController extends Controller
         $dateLabel = $this->resolveDateLabel($dateFilter, $customDate, $startDate, $endDate);
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView(
-            'reports-pdf',
+            'receptionist.reports-pdf',   // ← was 'reports-pdf' (wrong)
             compact('records', 'dateFilter', 'dateLabel', 'startDate', 'endDate')
         )->setPaper('a4', 'landscape');
 
         $filename = 'pvas-reports-' . now()->format('Y-m-d') . '.pdf';
-
-        $saveDir = self::PDF_SAVE_DIR;
-        if (! is_dir($saveDir)) {
-            mkdir($saveDir, 0755, true);
-        }
-        file_put_contents($saveDir . DIRECTORY_SEPARATOR . $filename, $pdf->output());
 
         return $pdf->download($filename);
     }
