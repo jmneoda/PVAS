@@ -992,15 +992,29 @@
     ══════════════════════════ */
     function formatDate(str) {
         if (!str) return '—';
-        var d = new Date(str + 'T00:00:00');
+        // Date-only strings (YYYY-MM-DD) must be parsed at local midnight,
+        // not UTC midnight, to avoid off-by-one-day shifts.
+        var parts = str.split('-');
+        var d = (parts.length === 3)
+            ? new Date(+parts[0], +parts[1] - 1, +parts[2])
+            : new Date(str);
+        if (isNaN(d)) return str;
         return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
     }
+
     function formatTime(str) {
         if (!str) return '—';
         var t = new Date('1970-01-01T' + str);
         if (isNaN(t)) return str;
         return t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     }
+
+    /**
+     * formatDateTime — handles ISO 8601 strings that now carry a timezone offset
+     * (e.g. "2024-05-13T21:37:00+08:00") produced by the controller.
+     * new Date() on a proper ISO string with offset is unambiguous across all
+     * modern browsers, so the result is always the correct local time.
+     */
     function formatDateTime(str) {
         if (!str) return '—';
         var dt = new Date(str);
@@ -1009,6 +1023,7 @@
         var time = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         return date + ' at ' + time;
     }
+
     function capitalise(s) {
         return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
     }
