@@ -705,7 +705,6 @@
             <button class="modal-close-btn" onclick="closeModal('editModal')">&times;</button>
         </div>
 
-        {{-- action is set dynamically by openEditModal() --}}
         <form method="POST" id="editForm" action="">
             @csrf
             @method('PUT')
@@ -888,27 +887,19 @@ document.addEventListener('keydown', e => {
 ════════════════════════════════════════════════════════════ */
 function openEditModal(id, customerId, petName, species, breed, gender, color, weight,
                        staffId, date, time, type, notes) {
-    // Point the form action at the correct update route
     document.getElementById('editForm').action = `{{ url('appointments') }}/${id}`;
-
-    // Appointment fields
     document.getElementById('edit_customer_id').value    = customerId;
     document.getElementById('edit_scheduled_date').value = date;
     document.getElementById('edit_scheduled_time').value = time;
     document.getElementById('edit_veterinarian_id').value = staffId;
     document.getElementById('edit_type').value           = type;
     document.getElementById('edit_notes').value          = notes;
-
-    // Pet fields
     document.getElementById('edit_pet_name').value = petName;
     document.getElementById('edit_species').value  = species;
     document.getElementById('edit_gender').value   = gender;
     document.getElementById('edit_color').value    = color;
     document.getElementById('edit_weight').value   = weight;
-
-    // Populate breeds for the selected species, then set the current breed
     updateBreeds('edit', breed);
-
     openModal('editModal');
 }
 
@@ -943,6 +934,36 @@ function normStatus(s) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   TIMEZONE-AWARE TIMESTAMP FORMATTER
+   ────────────────────────────────────────────────────────────
+   Laravel stores timestamps in UTC (e.g. "2024-01-01 13:37:00").
+   Without a timezone indicator, new Date() behaviour is
+   browser-inconsistent.  We normalise to ISO-8601 UTC by
+   replacing the space separator with 'T' and appending 'Z',
+   then let the browser convert to the viewer's local timezone.
+════════════════════════════════════════════════════════════ */
+function parseUtcTimestamp(str) {
+    if (!str) return null;
+    // Already has timezone info — parse as-is
+    if (/[Z+\-]\d*$/.test(str.trim())) {
+        const d = new Date(str);
+        return isNaN(d) ? null : d;
+    }
+    // MySQL/Laravel format: "2024-01-15 13:37:00" → treat as UTC
+    const normalised = str.trim().replace(' ', 'T') + 'Z';
+    const d = new Date(normalised);
+    return isNaN(d) ? null : d;
+}
+
+function formatTimestampLocal(str) {
+    const d = parseUtcTimestamp(str);
+    if (!d) return str || '—';
+    const date = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return date + ' · ' + time;
+}
+
+/* ════════════════════════════════════════════════════════════
    BUILD DETAIL MODAL CONTENT
 ════════════════════════════════════════════════════════════ */
 function buildModalContent(data) {
@@ -974,7 +995,6 @@ function buildModalContent(data) {
         </div>`
     ).join('');
 
-    /* ── Lock / warning notices ── */
     let lockNoticeHTML = '';
     if (isLocked) {
         lockNoticeHTML = `<div class="lock-notice">🔒 This appointment is <strong>${currentNorm === 'completed' ? 'completed' : 'cancelled'}</strong> and cannot be modified.</div>`;
@@ -984,22 +1004,14 @@ function buildModalContent(data) {
         lockNoticeHTML = `<div class="lock-notice-warn">⚠ This appointment is marked <strong>No Show</strong>. It can only be moved to <strong>Cancelled</strong>.</div>`;
     }
 
-    /* ── Timeline ── */
+    /* ── Timeline — timestamps shown in viewer's local timezone ── */
     let timelineHTML = '';
     if (history.length > 0) {
         timelineHTML = history.map(item => {
-            const sc  = statusConfig[normStatus(item.status)] || { label: item.status, dot: '#aaa', bg: '#f5f5f5', color: '#555', border: '#ccc' };
-            const lbl = item.status_label || sc.label;
-            let dateDisplay = '—', timeDisplay = '';
-            if (item.changed_at) {
-                try {
-                    const dt = new Date(item.changed_at);
-                    if (!isNaN(dt)) {
-                        dateDisplay = dt.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-                        timeDisplay = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    } else { dateDisplay = item.changed_at; }
-                } catch(e) { dateDisplay = item.changed_at; }
-            }
+            const sc       = statusConfig[normStatus(item.status)] || { label: item.status, dot: '#aaa', bg: '#f5f5f5', color: '#555', border: '#ccc' };
+            const lbl      = item.status_label || sc.label;
+            // ↓ Use the timezone-aware formatter so times show in local time (e.g. PHT)
+            const formatted = formatTimestampLocal(item.changed_at);
             const roleLabel = item.changed_by ?? 'System';
             const tlClass   = normStatus(item.status);
             return `<div class="timeline-item tl-${tlClass}">
@@ -1012,8 +1024,7 @@ function buildModalContent(data) {
                         ${escHtml(lbl)}
                     </div>
                     <div class="timeline-timestamp">
-                        <span>${escHtml(dateDisplay)}</span>
-                        ${timeDisplay ? ' &nbsp;·&nbsp; <span>' + escHtml(timeDisplay) + '</span>' : ''}
+                        <span>${escHtml(formatted)}</span>
                         &nbsp;·&nbsp; by <span class="timeline-role-badge">${escHtml(roleLabel)}</span>
                     </div>
                 </div>
@@ -1035,13 +1046,13 @@ function buildModalContent(data) {
 
     let optionsHTML = `<option value="" disabled selected>— Select new status —</option>`;
     allStatuses.forEach(s => {
-        const isUsed              = usedStatuses.has(s.val);
-        const isCurrent           = s.val === currentNorm;
-        const isBlockedConfirmed  = s.val === 'canceled' && isConfirmed;
-        const isBlockedNoShow     = isNoShow && s.val !== 'canceled';
-        const isBlocked           = isBlockedConfirmed || isBlockedNoShow;
-        const disabled            = isUsed || isCurrent || isBlocked ? 'disabled' : '';
-        const prefix              = isCurrent ? '● ' : (isUsed || isBlocked ? '✗ ' : '');
+        const isUsed             = usedStatuses.has(s.val);
+        const isCurrent          = s.val === currentNorm;
+        const isBlockedConfirmed = s.val === 'canceled' && isConfirmed;
+        const isBlockedNoShow    = isNoShow && s.val !== 'canceled';
+        const isBlocked          = isBlockedConfirmed || isBlockedNoShow;
+        const disabled           = isUsed || isCurrent || isBlocked ? 'disabled' : '';
+        const prefix             = isCurrent ? '● ' : (isUsed || isBlocked ? '✗ ' : '');
         optionsHTML += `<option value="${s.val}" ${disabled}>${prefix}${escHtml(s.label)}</option>`;
     });
 
